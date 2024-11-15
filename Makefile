@@ -12,3 +12,6 @@ benchmarker/userdata/img.zip:
 benchmarker/userdata/img: benchmarker/userdata/img.zip
 	cd benchmarker/userdata && \
 	unzip -qq -o img.zip
+
+kataribe:
+	cat webapp/var/log/nginx/access.log | kataribe -f webapp/etc/kataribe/kataribe.toml
