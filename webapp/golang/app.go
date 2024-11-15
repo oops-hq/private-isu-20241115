@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -111,11 +110,6 @@ func tryLogin(accountName, password string) *User {
 	} else {
 		return nil
 	}
-}
-
-func validateUser(accountName, password string) bool {
-	return regexp.MustCompile(`\A[0-9a-zA-Z_]{3,}\z`).MatchString(accountName) &&
-		regexp.MustCompile(`\A[0-9a-zA-Z_]{6,}\z`).MatchString(password)
 }
 
 func getSession(r *http.Request) *sessions.Session {
@@ -311,16 +305,6 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	accountName, password := r.FormValue("account_name"), r.FormValue("password")
-
-	validated := validateUser(accountName, password)
-	if !validated {
-		session := getSession(r)
-		session.Values["notice"] = "アカウント名は3文字以上、パスワードは6文字以上である必要があります"
-		session.Save(r, w)
-
-		http.Redirect(w, r, "/register", http.StatusFound)
-		return
-	}
 
 	exists := 0
 	// ユーザーが存在しない場合はエラーになるのでエラーチェックはしない
