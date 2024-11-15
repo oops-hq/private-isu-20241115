@@ -1,3 +1,4 @@
+use isuconp;
 alter table users add index idx_account_name_del_flg (account_name, del_flg);
 alter table comments add index idx_comments_post_id_created_at (post_id, created_at);
 alter table comments add index idx_comments_user_id (user_id);
