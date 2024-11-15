@@ -70,7 +70,7 @@ type Comment struct {
 	User      User
 }
 
-var templates *template.Template
+var indexTemplates *template.Template
 
 func init() {
 	memdAddr := os.Getenv("ISUCONP_MEMCACHED_ADDRESS")
@@ -84,7 +84,7 @@ func init() {
 	fmap := template.FuncMap{
 		"imageURL": imageURL,
 	}
-	templates = template.Must(template.New("layout.html").Funcs(fmap).ParseFiles(
+	indexTemplates = template.Must(template.New("layout.html").Funcs(fmap).ParseFiles(
 		getTemplPath("layout.html"),
 		getTemplPath("index.html"),
 		getTemplPath("posts.html"),
@@ -256,7 +256,7 @@ func secureRandomStr(b int) string {
 }
 
 func getTemplPath(filename string) string {
-	return path.Join("templates", filename)
+	return path.Join("indexTemplates", filename)
 }
 
 func getInitialize(w http.ResponseWriter, r *http.Request) {
@@ -401,7 +401,7 @@ func getIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	templates.Execute(w, struct {
+	indexTemplates.Execute(w, struct {
 		Posts     []Post
 		Me        User
 		CSRFToken string
