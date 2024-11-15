@@ -83,6 +83,9 @@ func dbInitialize() {
 		"DELETE FROM comments WHERE id > 100000",
 		"UPDATE users SET del_flg = 0",
 		"UPDATE users SET del_flg = 1 WHERE id % 50 = 0",
+		"ALTER TABLE posts ADD INDEX posts_created_at_idx (created_at)",
+		"ALTER TABLE comments ADD INDEX comments_post_id_idx (post_id)",
+		"ALTER TABLE comments ADD INDEX comments_post_id_created_at_idx (post_id, created_at)",
 	}
 
 	for _, sql := range sqls {
