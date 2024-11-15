@@ -5,6 +5,7 @@ services:
     volumes:
       - ./etc/nginx/conf.d:/etc/nginx/conf.d
       - ./public:/public
+      - image:/public/image
     ports:
       - "80:80"
     networks:
@@ -13,7 +14,7 @@ services:
   app:
     build:
       # Go実装の場合は golang/ PHP実装の場合は php/
-      context: ruby/
+      context: golang/
       dockerfile: Dockerfile
     depends_on:
       - mysql
@@ -29,6 +30,7 @@ services:
       - my_network
     volumes:
       - ./public:/home/public
+      - image:/home/public/image
     init: true
     deploy:
       resources:
@@ -62,6 +64,7 @@ services:
 
 volumes:
   mysql:
+  image:
 
 networks:
   my_network:

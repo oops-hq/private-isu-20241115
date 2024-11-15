@@ -31,6 +31,11 @@ RUN \
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/go/dockerfile-user-best-practices/
 ARG UID=10001
+
+RUN mkdir -p /home/public/image
+VOLUME /home/public/image
+RUN chown ${UID}:${UID} /home/public/image
+
 RUN adduser \
   --disabled-password \
   --gecos "" \
