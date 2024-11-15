@@ -85,6 +85,7 @@ func dbInitialize() {
 		"UPDATE users SET del_flg = 0",
 		"UPDATE users SET del_flg = 1 WHERE id % 50 = 0",
 		"ALTER TABLE posts ADD INDEX posts_created_at_idx (created_at)",
+		"ALTER TABLE posts ADD INDEX posts_user_id_idx (user_id)",
 		"ALTER TABLE comments ADD INDEX comments_post_id_idx (post_id)",
 		"ALTER TABLE comments ADD INDEX comments_post_id_created_at_idx (post_id, created_at)",
 	}
@@ -485,10 +486,8 @@ func getAccountName(w http.ResponseWriter, r *http.Request) {
 	}
 
 	postIDs := []int{}
-	err = db.Select(&postIDs, "SELECT `id` FROM `posts` WHERE `user_id` = ?", user.ID)
-	if err != nil {
-		log.Print(err)
-		return
+	for _, post := range results {
+		postIDs = append(postIDs, post.ID)
 	}
 	postCount := len(postIDs)
 
