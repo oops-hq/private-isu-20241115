@@ -2,6 +2,7 @@ package main
 
 import (
 	crand "crypto/rand"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bradfitz/gomemcache/memcache"
@@ -25,6 +27,10 @@ import (
 var (
 	db    *sqlx.DB
 	store *gsm.MemcacheStore
+)
+
+var (
+	cacheUser = sync.Map{}
 )
 
 const (
@@ -74,6 +80,14 @@ func init() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 }
 
+func cacheInitialize() {
+	var users []User
+	db.Select(&users, "SELECT * FROM users")
+	for _, user := range users {
+		cacheUser.Store(user.ID, user)
+	}
+}
+
 func dbInitialize() {
 	sqls := []string{
 		"DELETE FROM users WHERE id > 1000",
@@ -96,6 +110,7 @@ func dbInitialize() {
 	for _, sql := range sqls {
 		db.Exec(sql)
 	}
+	cacheInitialize()
 }
 
 func tryLogin(accountName, password string) *User {
@@ -125,14 +140,12 @@ func getSessionUser(r *http.Request) User {
 		return User{}
 	}
 
-	u := User{}
-
-	err := db.Get(&u, "SELECT * FROM `users` WHERE `id` = ?", uid)
-	if err != nil {
+	u, ok := cacheUser.Load(uid)
+	if !ok {
 		return User{}
 	}
 
-	return u
+	return u.(User)
 }
 
 func getFlash(w http.ResponseWriter, r *http.Request, key string) string {
@@ -168,10 +181,11 @@ func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, erro
 		}
 
 		for i := 0; i < len(comments); i++ {
-			err := db.Get(&comments[i].User, "SELECT * FROM `users` WHERE `id` = ?", comments[i].UserID)
-			if err != nil {
-				return nil, err
+			u, ok := cacheUser.Load(comments[i].UserID)
+			if !ok {
+				return nil, errors.New("user not found")
 			}
+			comments[i].User = u.(User)
 		}
 
 		// reverse
@@ -181,11 +195,12 @@ func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, erro
 
 		p.Comments = comments
 
-		err = db.Get(&p.User, "SELECT * FROM `users` WHERE `id` = ?", p.UserID)
-		if err != nil {
-			return nil, err
+		u, ok := cacheUser.Load(p.UserID)
+		if !ok {
+			return nil, errors.New("user not found")
 		}
 
+		p.User = u.(User)
 		p.CSRFToken = csrfToken
 
 		if p.User.DelFlg == 0 {
@@ -332,6 +347,12 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 		return
 	}
+
+	cacheUser.Store(uid, User{
+		ID:          int(uid),
+		AccountName: accountName,
+		Passhash:    password,
+	})
 	session.Values["user_id"] = uid
 	session.Values["csrf_token"] = secureRandomStr(16)
 	session.Save(r, w)
@@ -743,7 +764,7 @@ func postAdminBanned(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := "UPDATE `users` SET `del_flg` = ? WHERE `id` = ?"
+	query := "UPDATE `users` SET `del_flg` = 1 WHERE `id` IN (?)"
 
 	err := r.ParseForm()
 	if err != nil {
@@ -751,8 +772,17 @@ func postAdminBanned(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	query, params, err := sqlx.In(query, r.Form["uid[]"])
+	db.Exec(query, params)
+
 	for _, id := range r.Form["uid[]"] {
-		db.Exec(query, 1, id)
+		u, ok := cacheUser.Load(id)
+		if !ok {
+			continue
+		}
+		user := u.(User)
+		user.DelFlg = 1
+		cacheUser.Store(id, user)
 	}
 
 	http.Redirect(w, r, "/admin/banned", http.StatusFound)
@@ -816,6 +846,8 @@ func main() {
 	r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
 		http.FileServer(http.Dir("../public")).ServeHTTP(w, r)
 	})
+
+	cacheInitialize()
 
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
