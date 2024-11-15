@@ -82,7 +82,16 @@ func dbInitialize() {
 		"DELETE FROM posts WHERE id > 10000",
 		"DELETE FROM comments WHERE id > 100000",
 		"UPDATE users SET del_flg = 0",
-		"UPDATE users SET del_flg = 1 WHERE id % 50 = 0",
+		"UPDATE users SET del_flg = 1 WHERE id % 50 = 0;",
+		//INDEX
+		"ALTER TABLE comments ADD INDEX ix_comments_post_id(post_id);",
+		"ALTER TABLE comments ADD INDEX ix_comments_user_id(user_id);",
+		"ALTER TABLE comments ADD INDEX ix_comments_created_at(created_at);",
+		"ALTER TABLE posts ADD INDEX ix_posts_created_at(created_at);",
+		"ALTER TABLE posts ADD INDEX ix_posts_user_id(user_id);",
+		"ALTER TABLE users ADD INDEX ix_users_del_flg(del_flg);",
+		"ALTER TABLE users ADD INDEX ix_users_authority(authority);",
+		"ALTER TABLE users ADD INDEX ix_users_created_at(created_at);",
 	}
 
 	for _, sql := range sqls {
