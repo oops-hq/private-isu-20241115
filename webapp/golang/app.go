@@ -388,7 +388,8 @@ func getIndex(w http.ResponseWriter, r *http.Request) {
 	err := db.Select(&results, `SELECT posts.id, posts.user_id, posts.body, posts.mime, posts.created_at, count(distinct comments.id) as comment_count FROM posts 
 		left join comments on posts.id = comments.post_id
         group by 1,2,3,4,5
-		ORDER BY posts.created_at DESC`)
+		ORDER BY posts.created_at DESC limit 30
+`)
 	if err != nil {
 		log.Print(err)
 		return
