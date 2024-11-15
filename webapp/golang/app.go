@@ -71,6 +71,7 @@ type Comment struct {
 }
 
 var indexTemplates *template.Template
+var getPostsIDTemplates *template.Template
 
 func init() {
 	memdAddr := os.Getenv("ISUCONP_MEMCACHED_ADDRESS")
@@ -88,6 +89,12 @@ func init() {
 		getTemplPath("layout.html"),
 		getTemplPath("index.html"),
 		getTemplPath("posts.html"),
+		getTemplPath("post.html"),
+	))
+
+	getPostsIDTemplates = template.Must(template.New("layout.html").Funcs(fmap).ParseFiles(
+		getTemplPath("layout.html"),
+		getTemplPath("post_id.html"),
 		getTemplPath("post.html"),
 	))
 }
@@ -575,15 +582,7 @@ func getPostsID(w http.ResponseWriter, r *http.Request) {
 
 	me := getSessionUser(r)
 
-	fmap := template.FuncMap{
-		"imageURL": imageURL,
-	}
-
-	template.Must(template.New("layout.html").Funcs(fmap).ParseFiles(
-		getTemplPath("layout.html"),
-		getTemplPath("post_id.html"),
-		getTemplPath("post.html"),
-	)).Execute(w, struct {
+	getPostsIDTemplates.Execute(w, struct {
 		Post Post
 		Me   User
 	}{p, me})
