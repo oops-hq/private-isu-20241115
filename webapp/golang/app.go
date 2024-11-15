@@ -256,7 +256,7 @@ func secureRandomStr(b int) string {
 }
 
 func getTemplPath(filename string) string {
-	return path.Join("indexTemplates", filename)
+	return path.Join("templates", filename)
 }
 
 func getInitialize(w http.ResponseWriter, r *http.Request) {
