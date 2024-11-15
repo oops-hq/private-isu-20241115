@@ -28,6 +28,8 @@ services:
       ISUCONP_MEMCACHED_ADDRESS: memcached:11211
     networks:
       - my_network
+    ports:
+      - "6060:6060"
     volumes:
       - ./public:/home/public
       - image:/home/public/image
