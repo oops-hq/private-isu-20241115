@@ -55,7 +55,7 @@ type Post struct {
 	Body         string    `db:"body"`
 	Mime         string    `db:"mime"`
 	CreatedAt    time.Time `db:"created_at"`
-	CommentCount int
+	CommentCount int       `db:"comment_count"`
 	Comments     []Comment
 	User         User
 	CSRFToken    string
@@ -167,17 +167,12 @@ func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, erro
 	var posts []Post
 
 	for _, p := range results {
-		err := db.Get(&p.CommentCount, "SELECT COUNT(*) AS `count` FROM `comments` WHERE `post_id` = ?", p.ID)
-		if err != nil {
-			return nil, err
-		}
-
 		query := "SELECT * FROM `comments` WHERE `post_id` = ? ORDER BY `created_at` DESC"
 		if !allComments {
 			query += " LIMIT 3"
 		}
 		var comments []Comment
-		err = db.Select(&comments, query, p.ID)
+		err := db.Select(&comments, query, p.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -378,7 +373,10 @@ func getIndex(w http.ResponseWriter, r *http.Request) {
 
 	results := []Post{}
 
-	err := db.Select(&results, "SELECT `id`, `user_id`, `body`, `mime`, `created_at` FROM `posts` ORDER BY `created_at` DESC")
+	err := db.Select(&results, `SELECT posts.id, posts.user_id, posts.body, posts.mime, posts.created_at, count(distinct comments.id) as comment_count FROM posts 
+		left join comments on posts.id = comments.post_id
+        group by 1,2,3,4,5
+		ORDER BY posts.created_at DESC`)
 	if err != nil {
 		log.Print(err)
 		return
@@ -424,7 +422,7 @@ func getAccountName(w http.ResponseWriter, r *http.Request) {
 
 	results := []Post{}
 
-	err = db.Select(&results, "SELECT `id`, `user_id`, `body`, `mime`, `created_at` FROM `posts` WHERE `user_id` = ? ORDER BY `created_at` DESC", user.ID)
+	err = db.Select(&results, "SELECT posts.id, posts.user_id, posts.body, posts.mime, posts.created_at, count(distinct comments.id) as comment_count FROM `posts` left join comments on posts.id = comments.post_id WHERE posts.user_id = ?  group by 1,2,3,4,5 ORDER BY posts.created_at DESC", user.ID)
 	if err != nil {
 		log.Print(err)
 		return
@@ -512,7 +510,11 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := []Post{}
-	err = db.Select(&results, "SELECT `id`, `user_id`, `body`, `mime`, `created_at` FROM `posts` WHERE `created_at` <= ? ORDER BY `created_at` DESC", t.Format(ISO8601Format))
+	err = db.Select(&results, `SELECT posts.id, posts.user_id, posts.body, posts.mime, posts.created_at, count(distinct comments.id) as comment_count FROM posts
+                                                                         left join comments on posts.id = comments.post_id
+                                                                         WHERE posts.created_at <= ?
+                                                                         group by 1,2,3,4,5 
+                                                                         ORDER BY posts.created_at DESC`, t.Format(ISO8601Format))
 	if err != nil {
 		log.Print(err)
 		return
@@ -548,7 +550,7 @@ func getPostsID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := []Post{}
-	err = db.Select(&results, "SELECT * FROM `posts` WHERE `id` = ?", pid)
+	err = db.Select(&results, "SELECT posts.*, count(distinct comments.id) as comment_count FROM `posts` left join comments on posts.id = comments.post_id WHERE posts.id = ? group by 1,2,3,4,5", pid)
 	if err != nil {
 		log.Print(err)
 		return
