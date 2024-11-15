@@ -70,6 +70,15 @@ type Comment struct {
 	User      User
 }
 
+type CommentWithUser struct {
+	ID          int       `db:"id"`
+	PostID      int       `db:"post_id"`
+	UserID      int       `db:"user_id"`
+	Comment     string    `db:"comment"`
+	CreatedAt   time.Time `db:"created_at"`
+	AccountName string    `db:"account_name"`
+}
+
 var indexTemplates *template.Template
 var getPostsIDTemplates *template.Template
 
@@ -186,20 +195,35 @@ func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, erro
 	var posts []Post
 
 	for _, p := range results {
-		query := "SELECT * FROM `comments` WHERE `post_id` = ? ORDER BY `created_at` DESC"
+		query := `SELECT 
+    	comments.id,
+    	comments.post_id,
+    	comments.user_id,
+    	comments.comment,
+    	comments.created_at,
+    	users.account_name
+    FROM comments join users on comments.user_id = users.id WHERE post_id = ? ORDER BY created_at DESC`
 		if !allComments {
 			query += " LIMIT 3"
 		}
-		var comments []Comment
-		err := db.Select(&comments, query, p.ID)
+		var commentsWithUser []CommentWithUser
+		err := db.Select(&commentsWithUser, query, p.ID)
 		if err != nil {
 			return nil, err
 		}
 
-		for i := 0; i < len(comments); i++ {
-			err := db.Get(&comments[i].User, "SELECT * FROM `users` WHERE `id` = ?", comments[i].UserID)
-			if err != nil {
-				return nil, err
+		comments := make([]Comment, len(commentsWithUser))
+		for i := 0; i < len(commentsWithUser); i++ {
+			comments[i] = Comment{
+				ID:        commentsWithUser[i].ID,
+				PostID:    commentsWithUser[i].PostID,
+				UserID:    commentsWithUser[i].UserID,
+				Comment:   commentsWithUser[i].Comment,
+				CreatedAt: commentsWithUser[i].CreatedAt,
+				User: User{
+					ID:          commentsWithUser[i].UserID,
+					AccountName: commentsWithUser[i].AccountName,
+				},
 			}
 		}
 
