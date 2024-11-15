@@ -9,16 +9,16 @@ ranking_count = 20
 slow_count = 37
 
 # Show Standard Deviation column
-show_stddev = true
+# show_stddev = true
 
 # Show HTTP Status Code columns
 show_status_code = true
 
 # Show HTTP Response Bytes columns
-show_bytes = true
+# show_bytes = true
 
 # Percentiles
-percentiles = [ 50.0, 90.0, 95.0, 99.0 ]
+# percentiles = [ 50.0, 90.0, 95.0, 99.0 ]
 
 ################################################################################
 # Scale
