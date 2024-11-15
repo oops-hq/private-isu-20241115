@@ -14,4 +14,4 @@ benchmarker/userdata/img: benchmarker/userdata/img.zip
 	unzip -qq -o img.zip
 
 kataribe:
-	cat webapp/var/log/nginx/access.log | kataribe -f webapp/etc/kataribe/kataribe.toml
+	cat webapp/var/log/nginx/custom_access.log | kataribe -f webapp/etc/kataribe/kataribe.toml
