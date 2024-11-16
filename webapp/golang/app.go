@@ -92,6 +92,7 @@ type CommentWithUser struct {
 
 var indexTemplates *template.Template
 var getPostsIDTemplates *template.Template
+var getAccountNameTemplates *template.Template
 
 func init() {
 	memdAddr := os.Getenv("ISUCONP_MEMCACHED_ADDRESS")
@@ -115,6 +116,12 @@ func init() {
 	getPostsIDTemplates = template.Must(template.New("layout.html").Funcs(fmap).ParseFiles(
 		getTemplPath("layout.html"),
 		getTemplPath("post_id.html"),
+		getTemplPath("post.html"),
+	))
+	getAccountNameTemplates = template.Must(template.New("layout.html").Funcs(fmap).ParseFiles(
+		getTemplPath("layout.html"),
+		getTemplPath("user.html"),
+		getTemplPath("posts.html"),
 		getTemplPath("post.html"),
 	))
 }
@@ -600,16 +607,7 @@ LIMIT ?`, accountName, postsPerPage)
 
 	me := getSessionUser(r)
 
-	fmap := template.FuncMap{
-		"imageURL": imageURL,
-	}
-
-	template.Must(template.New("layout.html").Funcs(fmap).ParseFiles(
-		getTemplPath("layout.html"),
-		getTemplPath("user.html"),
-		getTemplPath("posts.html"),
-		getTemplPath("post.html"),
-	)).Execute(w, struct {
+	getAccountNameTemplates.Execute(w, struct {
 		Posts          []Post
 		User           User
 		PostCount      int
