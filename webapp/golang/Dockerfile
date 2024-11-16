@@ -34,6 +34,7 @@ ARG UID=10001
 
 RUN mkdir -p /home/public/image
 VOLUME /home/public/image
+COPY ./image /home/public/image
 RUN chown ${UID}:${UID} /home/public/image
 
 RUN adduser \

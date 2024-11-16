@@ -1,11 +1,13 @@
 name: private-isu
 services:
   nginx:
-    image: nginx:1.26
+    build:
+      context: nginx/
+      dockerfile: Dockerfile
     volumes:
       - ./etc/nginx/conf.d:/etc/nginx/conf.d
-      - ./public:/public
-      - image:/public/image
+    volumes_from:
+      - app
     ports:
       - "80:80"
     networks:
@@ -30,9 +32,6 @@ services:
       - my_network
     ports:
       - "6060:6060"
-    volumes:
-      - ./public:/home/public
-      - image:/home/public/image
     init: true
     deploy:
       resources:
@@ -66,7 +65,6 @@ services:
 
 volumes:
   mysql:
-  image:
 
 networks:
   my_network:
