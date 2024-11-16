@@ -209,67 +209,6 @@ func getFlash(w http.ResponseWriter, r *http.Request, key string) string {
 	}
 }
 
-func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, error) {
-	var posts []Post
-
-	for _, p := range results {
-		query := `SELECT 
-    	comments.id,
-    	comments.post_id,
-    	comments.user_id,
-    	comments.comment,
-    	comments.created_at,
-    	users.account_name
-    FROM comments join users on comments.user_id = users.id WHERE post_id = ? ORDER BY created_at DESC`
-		if !allComments {
-			query += " LIMIT 3"
-		}
-		var commentsWithUser []CommentWithUser
-		err := db.Select(&commentsWithUser, query, p.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		comments := make([]Comment, len(commentsWithUser))
-		for i := 0; i < len(commentsWithUser); i++ {
-			comments[i] = Comment{
-				ID:        commentsWithUser[i].ID,
-				PostID:    commentsWithUser[i].PostID,
-				UserID:    commentsWithUser[i].UserID,
-				Comment:   commentsWithUser[i].Comment,
-				CreatedAt: commentsWithUser[i].CreatedAt,
-				User: User{
-					ID:          commentsWithUser[i].UserID,
-					AccountName: commentsWithUser[i].AccountName,
-				},
-			}
-		}
-
-		// reverse
-		for i, j := 0, len(comments)-1; i < j; i, j = i+1, j-1 {
-			comments[i], comments[j] = comments[j], comments[i]
-		}
-
-		p.Comments = comments
-
-		err = db.Get(&p.User, "SELECT * FROM `users` WHERE `id` = ?", p.UserID)
-		if err != nil {
-			return nil, err
-		}
-
-		p.CSRFToken = csrfToken
-
-		if p.User.DelFlg == 0 {
-			posts = append(posts, p)
-		}
-		if len(posts) >= postsPerPage {
-			break
-		}
-	}
-
-	return posts, nil
-}
-
 func makePosts2(results []PostWithUser, csrfToken string, allComments bool) ([]Post, error) {
 	var posts []Post
 
