@@ -545,11 +545,19 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := []Post{}
-	err = db.Select(&results, `SELECT posts.id, posts.user_id, posts.body, posts.mime, posts.created_at, count(distinct comments.id) as comment_count FROM posts
-                                                                         left join comments on posts.id = comments.post_id
-                                                                         WHERE posts.created_at <= ?
-                                                                         group by 1,2,3,4,5 
-                                                                         ORDER BY posts.created_at DESC`, t.Format(ISO8601Format))
+	err = db.Select(&results, `SELECT
+    posts.id,
+    posts.user_id,
+    posts.body,
+    posts.mime,
+    posts.created_at,
+    count(distinct comments.id) as comment_count
+FROM posts
+left join comments on posts.id = comments.post_id
+WHERE posts.created_at <= ?
+group by 1,2,3,4,5 
+ORDER BY posts.created_at DESC
+`, t.Format(ISO8601Format))
 	if err != nil {
 		log.Print(err)
 		return
