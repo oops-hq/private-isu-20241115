@@ -30,6 +30,7 @@ import (
 var (
 	db    *sqlx.DB
 	store *gsm.MemcacheStore
+	cache *memcache.Client
 )
 
 const (
@@ -99,8 +100,8 @@ func init() {
 	if memdAddr == "" {
 		memdAddr = "localhost:11211"
 	}
-	memcacheClient := memcache.New(memdAddr)
-	store = gsm.NewMemcacheStore(memcacheClient, "iscogram_", []byte("sendagaya"))
+	cache = memcache.New(memdAddr)
+	store = gsm.NewMemcacheStore(cache, "iscogram_", []byte("sendagaya"))
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	fmap := template.FuncMap{
@@ -126,6 +127,8 @@ func init() {
 	))
 }
 
+const cacheKeyPostCommentCount = "ppc:"
+
 func dbInitialize() {
 	sqls := []string{
 		"DELETE FROM users WHERE id > 1000",
@@ -137,6 +140,26 @@ func dbInitialize() {
 
 	for _, sql := range sqls {
 		db.Exec(sql)
+	}
+
+	type PostCommentCount struct {
+		ID        int `db:"id"`
+		PostCount int `db:"post_count"`
+	}
+	var postCommentCounts []PostCommentCount
+	err := db.Select(&postCommentCounts, "SELECT posts.id, COUNT(distinct comments.id) AS post_count FROM posts left join comments on posts.id = comments.post_id GROUP BY id")
+	if err != nil {
+		panic(err)
+	}
+	for _, p := range postCommentCounts {
+		item := &memcache.Item{
+			Key:   cacheKeyPostCommentCount + strconv.Itoa(p.ID),
+			Value: []byte(strconv.Itoa(p.PostCount)),
+		}
+		err := cache.Set(item)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -440,10 +463,8 @@ SELECT
     posts.body,
     posts.mime,
     posts.created_at,
-    count(distinct comments.id) as comment_count,
     users.account_name
 FROM posts 
-left join comments on posts.id = comments.post_id
 join users on posts.user_id = users.id
 where users.del_flg = 0
 group by 1,2,3,4,5
@@ -459,6 +480,13 @@ limit ?
 	if err != nil {
 		log.Print(err)
 		return
+	}
+	for _, post := range posts {
+		count, _ := cache.Get(cacheKeyPostCommentCount + strconv.Itoa(post.ID))
+		if count == nil {
+			continue
+		}
+		post.CommentCount, _ = strconv.Atoi(string(count.Value))
 	}
 
 	indexTemplates.Execute(w, struct {
@@ -760,7 +788,8 @@ func postComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	postID, err := strconv.Atoi(r.FormValue("post_id"))
+	pid := r.FormValue("post_id")
+	postID, err := strconv.Atoi(pid)
 	if err != nil {
 		log.Print("post_idは整数のみです")
 		return
@@ -772,6 +801,8 @@ func postComment(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 		return
 	}
+	// コメントカウントをインクリメント
+	_, _ = cache.Increment(cacheKeyPostCommentCount+pid, 1)
 
 	http.Redirect(w, r, fmt.Sprintf("/posts/%d", postID), http.StatusFound)
 }
