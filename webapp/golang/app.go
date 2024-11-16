@@ -60,6 +60,17 @@ type Post struct {
 	User         User
 	CSRFToken    string
 }
+type PostWithUser struct {
+	ID           int       `db:"id"`
+	UserID       int       `db:"user_id"`
+	Body         string    `db:"body"`
+	Mime         string    `db:"mime"`
+	CreatedAt    time.Time `db:"created_at"`
+	CommentCount int       `db:"comment_count"`
+	AccountName  string    `db:"account_name"`
+	Comments     []Comment
+	CSRFToken    string
+}
 
 type Comment struct {
 	ID        int       `db:"id"`
@@ -247,6 +258,64 @@ func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, erro
 		if len(posts) >= postsPerPage {
 			break
 		}
+	}
+
+	return posts, nil
+}
+
+func makePosts2(results []PostWithUser, csrfToken string) ([]Post, error) {
+	var posts []Post
+
+	for _, p := range results {
+		query := `SELECT 
+    	comments.id,
+    	comments.post_id,
+    	comments.user_id,
+    	comments.comment,
+    	comments.created_at,
+    	users.account_name
+    FROM comments join users on comments.user_id = users.id WHERE post_id = ? ORDER BY created_at DESC
+    LIMIT 3`
+		var commentsWithUser []CommentWithUser
+		err := db.Select(&commentsWithUser, query, p.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		comments := make([]Comment, len(commentsWithUser))
+		for i := 0; i < len(commentsWithUser); i++ {
+			comments[i] = Comment{
+				ID:        commentsWithUser[i].ID,
+				PostID:    commentsWithUser[i].PostID,
+				UserID:    commentsWithUser[i].UserID,
+				Comment:   commentsWithUser[i].Comment,
+				CreatedAt: commentsWithUser[i].CreatedAt,
+				User: User{
+					ID:          commentsWithUser[i].UserID,
+					AccountName: commentsWithUser[i].AccountName,
+				},
+			}
+		}
+
+		// reverse
+		for i, j := 0, len(comments)-1; i < j; i, j = i+1, j-1 {
+			comments[i], comments[j] = comments[j], comments[i]
+		}
+
+		pp := Post{
+			ID:        p.ID,
+			UserID:    p.UserID,
+			Body:      p.Body,
+			Mime:      p.Mime,
+			CreatedAt: p.CreatedAt,
+			Comments:  comments,
+			CSRFToken: csrfToken,
+			User: User{
+				AccountName: p.AccountName,
+			},
+		}
+
+		posts = append(posts, pp)
 	}
 
 	return posts, nil
@@ -544,26 +613,30 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results := []Post{}
+	results := []PostWithUser{}
 	err = db.Select(&results, `SELECT
     posts.id,
     posts.user_id,
     posts.body,
     posts.mime,
     posts.created_at,
-    count(distinct comments.id) as comment_count
+    count(distinct comments.id) as comment_count,
+    users.account_name
 FROM posts
 left join comments on posts.id = comments.post_id
+join users on posts.user_id = users.id
 WHERE posts.created_at <= ?
+and users.del_flg = 0
 group by 1,2,3,4,5 
 ORDER BY posts.created_at DESC
-`, t.Format(ISO8601Format))
+limit ?
+`, t.Format(ISO8601Format), postsPerPage)
 	if err != nil {
 		log.Print(err)
 		return
 	}
 
-	posts, err := makePosts(results, getCSRFToken(r), false)
+	posts, err := makePosts2(results, getCSRFToken(r))
 	if err != nil {
 		log.Print(err)
 		return
