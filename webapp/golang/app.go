@@ -637,8 +637,8 @@ join users on posts.user_id = users.id
 WHERE posts.id = ?
 and users.del_flg = 0
 group by 1,2,3,4,5
-limit ?
-`, pid, postsPerPage)
+limit 1
+`, pid)
 	if err != nil {
 		log.Print(err)
 		return
