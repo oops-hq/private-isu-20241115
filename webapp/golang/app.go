@@ -485,19 +485,31 @@ func getLogout(w http.ResponseWriter, r *http.Request) {
 func getIndex(w http.ResponseWriter, r *http.Request) {
 	me := getSessionUser(r)
 
-	results := []Post{}
+	results := []PostWithUser{}
 
-	err := db.Select(&results, `SELECT posts.id, posts.user_id, posts.body, posts.mime, posts.created_at, count(distinct comments.id) as comment_count FROM posts 
-		left join comments on posts.id = comments.post_id
-        group by 1,2,3,4,5
-		ORDER BY posts.created_at DESC limit 30
-`)
+	err := db.Select(&results, `
+SELECT
+    posts.id,
+    posts.user_id,
+    posts.body,
+    posts.mime,
+    posts.created_at,
+    count(distinct comments.id) as comment_count,
+    users.account_name
+FROM posts 
+left join comments on posts.id = comments.post_id
+join users on posts.user_id = users.id
+where users.del_flg = 0
+group by 1,2,3,4,5
+ORDER BY posts.created_at DESC
+limit ?
+`, postsPerPage)
 	if err != nil {
 		log.Print(err)
 		return
 	}
 
-	posts, err := makePosts(results, getCSRFToken(r), false)
+	posts, err := makePosts2(results, getCSRFToken(r), false)
 	if err != nil {
 		log.Print(err)
 		return
