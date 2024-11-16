@@ -263,7 +263,7 @@ func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, erro
 	return posts, nil
 }
 
-func makePosts2(results []PostWithUser, csrfToken string) ([]Post, error) {
+func makePosts2(results []PostWithUser, csrfToken string, allComments bool) ([]Post, error) {
 	var posts []Post
 
 	for _, p := range results {
@@ -274,8 +274,10 @@ func makePosts2(results []PostWithUser, csrfToken string) ([]Post, error) {
     	comments.comment,
     	comments.created_at,
     	users.account_name
-    FROM comments join users on comments.user_id = users.id WHERE post_id = ? ORDER BY created_at DESC
-    LIMIT 3`
+    FROM comments join users on comments.user_id = users.id WHERE post_id = ? ORDER BY created_at DESC`
+		if !allComments {
+			query += " LIMIT 3"
+		}
 		var commentsWithUser []CommentWithUser
 		err := db.Select(&commentsWithUser, query, p.ID)
 		if err != nil {
@@ -636,7 +638,7 @@ limit ?
 		return
 	}
 
-	posts, err := makePosts2(results, getCSRFToken(r))
+	posts, err := makePosts2(results, getCSRFToken(r), false)
 	if err != nil {
 		log.Print(err)
 		return
@@ -665,14 +667,25 @@ func getPostsID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results := []Post{}
-	err = db.Select(&results, "SELECT posts.*, count(distinct comments.id) as comment_count FROM `posts` left join comments on posts.id = comments.post_id WHERE posts.id = ? group by 1,2,3,4,5", pid)
+	results := []PostWithUser{}
+	err = db.Select(&results, `
+SELECT posts.*,
+       count(distinct comments.id) as comment_count,
+       users.account_name
+FROM posts
+left join comments on posts.id = comments.post_id
+join users on posts.user_id = users.id
+WHERE posts.id = ?
+and users.del_flg = 0
+group by 1,2,3,4,5
+limit ?
+`, pid, postsPerPage)
 	if err != nil {
 		log.Print(err)
 		return
 	}
 
-	posts, err := makePosts(results, getCSRFToken(r), true)
+	posts, err := makePosts2(results, getCSRFToken(r), true)
 	if err != nil {
 		log.Print(err)
 		return
