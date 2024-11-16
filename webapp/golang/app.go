@@ -525,31 +525,41 @@ limit ?
 
 func getAccountName(w http.ResponseWriter, r *http.Request) {
 	accountName := r.PathValue("accountName")
-	user := User{}
+	results := []PostWithUser{}
 
-	err := db.Get(&user, "SELECT * FROM `users` WHERE `account_name` = ? AND `del_flg` = 0", accountName)
+	err := db.Select(&results, `
+SELECT
+    posts.id,
+    posts.user_id,
+    posts.body,
+    posts.mime,
+    posts.created_at,
+    count(distinct comments.id) as comment_count,
+    users.account_name
+FROM posts
+left join comments on posts.id = comments.post_id
+join users on posts.user_id = users.id
+WHERE users.account_name = ?
+and users.del_flg = 0
+group by 1,2,3,4,5
+ORDER BY posts.created_at DESC
+LIMIT ?`, accountName, postsPerPage)
 	if err != nil {
 		log.Print(err)
 		return
 	}
-
-	if user.ID == 0 {
+	if len(results) == 0 {
 		w.WriteHeader(http.StatusNotFound)
-		return
 	}
 
-	results := []Post{}
-
-	err = db.Select(&results, "SELECT posts.id, posts.user_id, posts.body, posts.mime, posts.created_at, count(distinct comments.id) as comment_count FROM `posts` left join comments on posts.id = comments.post_id WHERE posts.user_id = ?  group by 1,2,3,4,5 ORDER BY posts.created_at DESC", user.ID)
+	posts, err := makePosts2(results, getCSRFToken(r), false)
 	if err != nil {
 		log.Print(err)
 		return
 	}
-
-	posts, err := makePosts(results, getCSRFToken(r), false)
-	if err != nil {
-		log.Print(err)
-		return
+	user := User{
+		ID:          results[0].UserID,
+		AccountName: accountName,
 	}
 
 	commentCount := 0
