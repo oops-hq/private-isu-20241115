@@ -470,7 +470,7 @@ func getLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 var indexSingleFlight singleflight.Group
-var indexSingleFlightKey = time.Now().String()
+var indexSingleFlightKey = "getIndexPosts"
 
 func getIndex(w http.ResponseWriter, r *http.Request) {
 	me := getSessionUser(r)
@@ -790,7 +790,7 @@ func postIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update lastUpdate
-	indexSingleFlightKey = time.Now().String()
+	indexSingleFlight.Forget(indexSingleFlightKey)
 
 	http.Redirect(w, r, "/posts/"+strconv.FormatInt(pid, 10), http.StatusFound)
 }
@@ -883,7 +883,7 @@ func postAdminBanned(w http.ResponseWriter, r *http.Request) {
 	for _, id := range r.Form["uid[]"] {
 		db.Exec(query, 1, id)
 	}
-	indexSingleFlightKey = time.Now().String()
+	indexSingleFlight.Forget(indexSingleFlightKey)
 
 	http.Redirect(w, r, "/admin/banned", http.StatusFound)
 }
