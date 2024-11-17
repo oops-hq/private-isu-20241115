@@ -310,6 +310,8 @@ func makePostsWithAllComments(results []PostWithUser) ([]Post, error) {
 	return posts, nil
 }
 
+var commentsSingleFlight singleflight.Group
+
 func makePosts2(results []PostWithUser) ([]Post, error) {
 	var posts []Post
 	query := `SELECT 
@@ -326,31 +328,36 @@ func makePosts2(results []PostWithUser) ([]Post, error) {
     LIMIT 3`
 
 	for _, p := range results {
-		var commentsWithUser []CommentWithUser
-		err := db.Select(&commentsWithUser, query, p.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		comments := make([]Comment, len(commentsWithUser))
-		for i := 0; i < len(commentsWithUser); i++ {
-			comments[i] = Comment{
-				ID:        commentsWithUser[i].ID,
-				PostID:    commentsWithUser[i].PostID,
-				UserID:    commentsWithUser[i].UserID,
-				Comment:   commentsWithUser[i].Comment,
-				CreatedAt: commentsWithUser[i].CreatedAt,
-				User: User{
-					ID:          commentsWithUser[i].UserID,
-					AccountName: commentsWithUser[i].AccountName,
-				},
+		key := "c:" + strconv.Itoa(p.ID)
+		comments, _, _ := commentsSingleFlight.Do(key, func() (interface{}, error) {
+			var commentsWithUser []CommentWithUser
+			err := db.Select(&commentsWithUser, query, p.ID)
+			if err != nil {
+				return nil, err
 			}
-		}
 
-		// reverse
-		for i, j := 0, len(comments)-1; i < j; i, j = i+1, j-1 {
-			comments[i], comments[j] = comments[j], comments[i]
-		}
+			comments := make([]Comment, len(commentsWithUser))
+			for i := 0; i < len(commentsWithUser); i++ {
+				comments[i] = Comment{
+					ID:        commentsWithUser[i].ID,
+					PostID:    commentsWithUser[i].PostID,
+					UserID:    commentsWithUser[i].UserID,
+					Comment:   commentsWithUser[i].Comment,
+					CreatedAt: commentsWithUser[i].CreatedAt,
+					User: User{
+						ID:          commentsWithUser[i].UserID,
+						AccountName: commentsWithUser[i].AccountName,
+					},
+				}
+			}
+
+			// reverse
+			for i, j := 0, len(comments)-1; i < j; i, j = i+1, j-1 {
+				comments[i], comments[j] = comments[j], comments[i]
+			}
+
+			return comments, nil
+		})
 
 		pp := Post{
 			ID:        p.ID,
@@ -358,7 +365,7 @@ func makePosts2(results []PostWithUser) ([]Post, error) {
 			Body:      p.Body,
 			Mime:      p.Mime,
 			CreatedAt: p.CreatedAt,
-			Comments:  comments,
+			Comments:  comments.([]Comment),
 			User: User{
 				AccountName: p.AccountName,
 			},
@@ -882,6 +889,7 @@ func postComment(w http.ResponseWriter, r *http.Request) {
 	}
 	// コメントカウントをインクリメント
 	_, _ = cache.Increment(cacheKeyPostCommentCount+pid, 1)
+	commentsSingleFlight.Forget("c:" + pid)
 
 	http.Redirect(w, r, fmt.Sprintf("/posts/%d", postID), http.StatusFound)
 }
