@@ -262,7 +262,10 @@ func makePosts2(results []PostWithUser, allComments bool) ([]Post, error) {
     	comments.comment,
     	comments.created_at,
     	users.account_name
-    FROM comments join users on comments.user_id = users.id WHERE post_id = ? ORDER BY created_at DESC`
+    FROM comments
+        join users on comments.user_id = users.id
+    WHERE post_id = ?
+    ORDER BY created_at DESC`
 		if !allComments {
 			query += " LIMIT 3"
 		}
