@@ -234,7 +234,13 @@ func getFlash(w http.ResponseWriter, r *http.Request, key string) string {
 	}
 }
 
-func makePosts2(results []PostWithUser, csrfToken string, allComments bool) ([]Post, error) {
+func fillCsrfToken(posts []Post, csrfToken string) {
+	for i := 0; i < len(posts); i++ {
+		posts[i].CSRFToken = csrfToken
+	}
+}
+
+func makePosts2(results []PostWithUser, allComments bool) ([]Post, error) {
 	var posts []Post
 
 	for _, p := range results {
@@ -290,7 +296,6 @@ func makePosts2(results []PostWithUser, csrfToken string, allComments bool) ([]P
 			CreatedAt:    p.CreatedAt,
 			CommentCount: p.CommentCount,
 			Comments:     comments,
-			CSRFToken:    csrfToken,
 			User: User{
 				AccountName: p.AccountName,
 			},
@@ -492,11 +497,12 @@ limit ?
 		return results, nil
 	})
 
-	posts, err := makePosts2(results.([]PostWithUser), getCSRFToken(r), false)
+	posts, err := makePosts2(results.([]PostWithUser), false)
 	if err != nil {
 		log.Print(err)
 		return
 	}
+	fillCsrfToken(posts, getCSRFToken(r))
 
 	indexTemplates.Execute(w, struct {
 		Posts     []Post
@@ -532,11 +538,12 @@ LIMIT ?`, accountName, postsPerPage)
 		w.WriteHeader(http.StatusNotFound)
 	}
 
-	posts, err := makePosts2(results, getCSRFToken(r), false)
+	posts, err := makePosts2(results, false)
 	if err != nil {
 		log.Print(err)
 		return
 	}
+	fillCsrfToken(posts, getCSRFToken(r))
 	user := User{
 		ID:          results[0].UserID,
 		AccountName: accountName,
@@ -628,7 +635,7 @@ limit ?
 		return
 	}
 
-	posts, err := makePosts2(results, getCSRFToken(r), false)
+	posts, err := makePosts2(results, false)
 	if err != nil {
 		log.Print(err)
 		return
@@ -638,6 +645,7 @@ limit ?
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
+	fillCsrfToken(posts, getCSRFToken(r))
 
 	fmap := template.FuncMap{
 		"imageURL": imageURL,
@@ -672,7 +680,7 @@ limit 1
 		return
 	}
 
-	posts, err := makePosts2(results, getCSRFToken(r), true)
+	posts, err := makePosts2(results, true)
 	if err != nil {
 		log.Print(err)
 		return
@@ -682,6 +690,7 @@ limit 1
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
+	fillCsrfToken(posts, getCSRFToken(r))
 
 	p := posts[0]
 
