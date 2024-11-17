@@ -18,6 +18,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/singleflight"
+
 	"github.com/bradfitz/gomemcache/memcache"
 	gsm "github.com/bradleypeabody/gorilla-sessions-memcache"
 	"github.com/felixge/fgprof"
@@ -451,12 +453,16 @@ func getLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
+var indexSingleFlight singleflight.Group
+var indexSingleFlightKey = time.Now().String()
+
 func getIndex(w http.ResponseWriter, r *http.Request) {
 	me := getSessionUser(r)
 
-	results := []PostWithUser{}
-
-	err := db.Select(&results, `
+	// 新しいポストが作成されるかユーザーがBanされるまで更新されないのでSingle flight化する
+	results, _, _ := indexSingleFlight.Do(indexSingleFlightKey, func() (any, error) {
+		var results []PostWithUser
+		err := db.Select(&results, `
 SELECT
     posts.id,
     posts.user_id,
@@ -470,12 +476,15 @@ where users.del_flg = 0
 ORDER BY posts.created_at DESC
 limit ?
 `, postsPerPage)
-	if err != nil {
-		log.Print(err)
-		return
-	}
+		if err != nil {
+			log.Print(err)
+			return nil, err
+		}
 
-	posts, err := makePosts2(results, getCSRFToken(r), false)
+		return results, nil
+	})
+
+	posts, err := makePosts2(results.([]PostWithUser), getCSRFToken(r), false)
 	if err != nil {
 		log.Print(err)
 		return
@@ -772,6 +781,9 @@ func postIndex(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 	}
 
+	// Update lastUpdate
+	indexSingleFlightKey = time.Now().String()
+
 	http.Redirect(w, r, "/posts/"+strconv.FormatInt(pid, 10), http.StatusFound)
 }
 
@@ -863,6 +875,7 @@ func postAdminBanned(w http.ResponseWriter, r *http.Request) {
 	for _, id := range r.Form["uid[]"] {
 		db.Exec(query, 1, id)
 	}
+	indexSingleFlightKey = time.Now().String()
 
 	http.Redirect(w, r, "/admin/banned", http.StatusFound)
 }
