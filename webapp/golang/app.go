@@ -240,6 +240,17 @@ func fillCsrfToken(posts []Post, csrfToken string) {
 	}
 }
 
+func fillCommentCount(posts []Post) {
+	for i := 0; i < len(posts); i++ {
+		count, _ := cache.Get(cacheKeyPostCommentCount + strconv.Itoa(posts[i].ID))
+		if count == nil {
+			posts[i].CommentCount = 0
+		} else {
+			posts[i].CommentCount, _ = strconv.Atoi(string(count.Value))
+		}
+	}
+}
+
 func makePosts2(results []PostWithUser, allComments bool) ([]Post, error) {
 	var posts []Post
 
@@ -281,21 +292,13 @@ func makePosts2(results []PostWithUser, allComments bool) ([]Post, error) {
 			comments[i], comments[j] = comments[j], comments[i]
 		}
 
-		count, _ := cache.Get(cacheKeyPostCommentCount + strconv.Itoa(p.ID))
-		if count == nil {
-			p.CommentCount = 0
-		} else {
-			p.CommentCount, _ = strconv.Atoi(string(count.Value))
-		}
-
 		pp := Post{
-			ID:           p.ID,
-			UserID:       p.UserID,
-			Body:         p.Body,
-			Mime:         p.Mime,
-			CreatedAt:    p.CreatedAt,
-			CommentCount: p.CommentCount,
-			Comments:     comments,
+			ID:        p.ID,
+			UserID:    p.UserID,
+			Body:      p.Body,
+			Mime:      p.Mime,
+			CreatedAt: p.CreatedAt,
+			Comments:  comments,
 			User: User{
 				AccountName: p.AccountName,
 			},
@@ -503,6 +506,7 @@ limit ?
 		return
 	}
 	fillCsrfToken(posts, getCSRFToken(r))
+	fillCommentCount(posts)
 
 	indexTemplates.Execute(w, struct {
 		Posts     []Post
@@ -544,6 +548,7 @@ LIMIT ?`, accountName, postsPerPage)
 		return
 	}
 	fillCsrfToken(posts, getCSRFToken(r))
+	fillCommentCount(posts)
 	user := User{
 		ID:          results[0].UserID,
 		AccountName: accountName,
@@ -646,6 +651,7 @@ limit ?
 		return
 	}
 	fillCsrfToken(posts, getCSRFToken(r))
+	fillCommentCount(posts)
 
 	fmap := template.FuncMap{
 		"imageURL": imageURL,
@@ -691,6 +697,7 @@ limit 1
 		return
 	}
 	fillCsrfToken(posts, getCSRFToken(r))
+	fillCommentCount(posts)
 
 	p := posts[0]
 
