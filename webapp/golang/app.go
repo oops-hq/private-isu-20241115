@@ -467,7 +467,6 @@ SELECT
 FROM posts 
 join users on posts.user_id = users.id
 where users.del_flg = 0
-group by 1,2,3,4,5
 ORDER BY posts.created_at DESC
 limit ?
 `, postsPerPage)
