@@ -275,14 +275,22 @@ func makePosts2(results []PostWithUser, csrfToken string, allComments bool) ([]P
 			comments[i], comments[j] = comments[j], comments[i]
 		}
 
+		count, _ := cache.Get(cacheKeyPostCommentCount + strconv.Itoa(p.ID))
+		if count == nil {
+			p.CommentCount = 0
+		} else {
+			p.CommentCount, _ = strconv.Atoi(string(count.Value))
+		}
+
 		pp := Post{
-			ID:        p.ID,
-			UserID:    p.UserID,
-			Body:      p.Body,
-			Mime:      p.Mime,
-			CreatedAt: p.CreatedAt,
-			Comments:  comments,
-			CSRFToken: csrfToken,
+			ID:           p.ID,
+			UserID:       p.UserID,
+			Body:         p.Body,
+			Mime:         p.Mime,
+			CreatedAt:    p.CreatedAt,
+			CommentCount: p.CommentCount,
+			Comments:     comments,
+			CSRFToken:    csrfToken,
 			User: User{
 				AccountName: p.AccountName,
 			},
@@ -489,13 +497,6 @@ limit ?
 		log.Print(err)
 		return
 	}
-	for _, post := range posts {
-		count, _ := cache.Get(cacheKeyPostCommentCount + strconv.Itoa(post.ID))
-		if count == nil {
-			continue
-		}
-		post.CommentCount, _ = strconv.Atoi(string(count.Value))
-	}
 
 	indexTemplates.Execute(w, struct {
 		Posts     []Post
@@ -516,14 +517,11 @@ SELECT
     posts.body,
     posts.mime,
     posts.created_at,
-    count(distinct comments.id) as comment_count,
     users.account_name
 FROM posts
-left join comments on posts.id = comments.post_id
 join users on posts.user_id = users.id
 WHERE users.account_name = ?
 and users.del_flg = 0
-group by 1,2,3,4,5
 ORDER BY posts.created_at DESC
 LIMIT ?`, accountName, postsPerPage)
 	if err != nil {
@@ -617,14 +615,11 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
     posts.body,
     posts.mime,
     posts.created_at,
-    count(distinct comments.id) as comment_count,
     users.account_name
 FROM posts
-left join comments on posts.id = comments.post_id
 join users on posts.user_id = users.id
 WHERE posts.created_at <= ?
 and users.del_flg = 0
-group by 1,2,3,4,5 
 ORDER BY posts.created_at DESC
 limit ?
 `, t.Format(ISO8601Format), postsPerPage)
@@ -665,14 +660,11 @@ func getPostsID(w http.ResponseWriter, r *http.Request) {
 	results := []PostWithUser{}
 	err = db.Select(&results, `
 SELECT posts.*,
-       count(distinct comments.id) as comment_count,
        users.account_name
 FROM posts
-left join comments on posts.id = comments.post_id
 join users on posts.user_id = users.id
 WHERE posts.id = ?
 and users.del_flg = 0
-group by 1,2,3,4,5
 limit 1
 `, pid)
 	if err != nil {
