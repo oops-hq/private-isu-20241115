@@ -251,11 +251,9 @@ func fillCommentCount(posts []Post) {
 	}
 }
 
-func makePosts2(results []PostWithUser, allComments bool) ([]Post, error) {
+func makePostsWithAllComments(results []PostWithUser) ([]Post, error) {
 	var posts []Post
-
-	for _, p := range results {
-		query := `SELECT 
+	query := `SELECT 
     	comments.id,
     	comments.post_id,
     	comments.user_id,
@@ -266,9 +264,68 @@ func makePosts2(results []PostWithUser, allComments bool) ([]Post, error) {
         join users on comments.user_id = users.id
     WHERE post_id = ?
     ORDER BY created_at DESC`
-		if !allComments {
-			query += " LIMIT 3"
+
+	for _, p := range results {
+		var commentsWithUser []CommentWithUser
+		err := db.Select(&commentsWithUser, query, p.ID)
+		if err != nil {
+			return nil, err
 		}
+
+		comments := make([]Comment, len(commentsWithUser))
+		for i := 0; i < len(commentsWithUser); i++ {
+			comments[i] = Comment{
+				ID:        commentsWithUser[i].ID,
+				PostID:    commentsWithUser[i].PostID,
+				UserID:    commentsWithUser[i].UserID,
+				Comment:   commentsWithUser[i].Comment,
+				CreatedAt: commentsWithUser[i].CreatedAt,
+				User: User{
+					ID:          commentsWithUser[i].UserID,
+					AccountName: commentsWithUser[i].AccountName,
+				},
+			}
+		}
+
+		// reverse
+		for i, j := 0, len(comments)-1; i < j; i, j = i+1, j-1 {
+			comments[i], comments[j] = comments[j], comments[i]
+		}
+
+		pp := Post{
+			ID:        p.ID,
+			UserID:    p.UserID,
+			Body:      p.Body,
+			Mime:      p.Mime,
+			CreatedAt: p.CreatedAt,
+			Comments:  comments,
+			User: User{
+				AccountName: p.AccountName,
+			},
+		}
+
+		posts = append(posts, pp)
+	}
+
+	return posts, nil
+}
+
+func makePosts2(results []PostWithUser) ([]Post, error) {
+	var posts []Post
+	query := `SELECT 
+    	comments.id,
+    	comments.post_id,
+    	comments.user_id,
+    	comments.comment,
+    	comments.created_at,
+    	users.account_name
+    FROM comments
+        join users on comments.user_id = users.id
+    WHERE post_id = ?
+    ORDER BY created_at DESC
+    LIMIT 3`
+
+	for _, p := range results {
 		var commentsWithUser []CommentWithUser
 		err := db.Select(&commentsWithUser, query, p.ID)
 		if err != nil {
@@ -503,7 +560,7 @@ limit ?
 		return results, nil
 	})
 
-	posts, err := makePosts2(results.([]PostWithUser), false)
+	posts, err := makePosts2(results.([]PostWithUser))
 	if err != nil {
 		log.Print(err)
 		return
@@ -545,7 +602,7 @@ LIMIT ?`, accountName, postsPerPage)
 		w.WriteHeader(http.StatusNotFound)
 	}
 
-	posts, err := makePosts2(results, false)
+	posts, err := makePosts2(results)
 	if err != nil {
 		log.Print(err)
 		return
@@ -643,7 +700,7 @@ limit ?
 		return
 	}
 
-	posts, err := makePosts2(results, false)
+	posts, err := makePosts2(results)
 	if err != nil {
 		log.Print(err)
 		return
@@ -689,7 +746,7 @@ limit 1
 		return
 	}
 
-	posts, err := makePosts2(results, true)
+	posts, err := makePostsWithAllComments(results)
 	if err != nil {
 		log.Print(err)
 		return
